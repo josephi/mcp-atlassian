@@ -15,7 +15,7 @@ from .jira import JiraFetcher
 from .jira.config import JiraConfig
 from .utils.io import is_read_only_mode
 from .utils.logging import log_config_param
-from .utils.urls import is_atlassian_cloud_url
+from .utils.urls import is_cloud_instance
 
 # Configure logging
 logger = logging.getLogger("mcp-atlassian")
@@ -36,7 +36,7 @@ def get_available_services() -> dict[str, bool | None]:
     # or server/data center authentication (URL + ( personal token or username + API token ))
     confluence_url = os.getenv("CONFLUENCE_URL")
     if confluence_url:
-        is_cloud = is_atlassian_cloud_url(confluence_url)
+        is_cloud = is_cloud_instance("confluence", confluence_url)
 
         if is_cloud:
             confluence_is_setup = all(
@@ -67,7 +67,7 @@ def get_available_services() -> dict[str, bool | None]:
     # or server/data center authentication (URL + personal token)
     jira_url = os.getenv("JIRA_URL")
     if jira_url:
-        is_cloud = is_atlassian_cloud_url(jira_url)
+        is_cloud = is_cloud_instance("jira", jira_url)
 
         if is_cloud:
             jira_is_setup = all(

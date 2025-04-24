@@ -1,6 +1,9 @@
 """Tests for the URL utilities module."""
 
-from mcp_atlassian.utils.urls import is_atlassian_cloud_url
+import pytest
+from unittest.mock import patch
+
+from mcp_atlassian.utils.urls import is_atlassian_cloud_url, is_cloud_instance
 
 
 def test_is_atlassian_cloud_url_empty():
@@ -54,6 +57,73 @@ def test_is_atlassian_cloud_url_with_protocols():
     # Test with different protocols
     assert is_atlassian_cloud_url("https://example.atlassian.net") is True
     assert is_atlassian_cloud_url("http://example.atlassian.net") is True
-    assert (
-        is_atlassian_cloud_url("ftp://example.atlassian.net") is True
-    )  # URL parsing still works
+    assert is_atlassian_cloud_url("ftp://example.atlassian.net") is True  # URL parsing still works
+
+
+def test_is_cloud_instance_invalid_service():
+    """Test that is_cloud_instance raises ValueError for invalid service."""
+    with pytest.raises(ValueError, match="Service must be either 'jira' or 'confluence'"):
+        is_cloud_instance("invalid")
+
+
+def test_is_cloud_instance_explicit_setting():
+    """Test that is_cloud_instance respects explicit environment variable settings."""
+    test_cases = [
+        # (service, is_cloud_value, expected_result)
+        ("jira", "true", True),
+        ("jira", "True", True),
+        ("jira", "1", True),
+        ("jira", "yes", True),
+        ("jira", "false", False),
+        ("jira", "False", False),
+        ("jira", "0", False),
+        ("jira", "no", False),
+        ("confluence", "true", True),
+        ("confluence", "false", False),
+    ]
+    
+    for service, is_cloud_value, expected in test_cases:
+        with patch.dict("os.environ", {
+            f"{service.upper()}_IS_CLOUD": is_cloud_value,
+        }, clear=True):
+            assert is_cloud_instance(service) is expected
+
+
+def test_is_cloud_instance_url_based():
+    """Test that is_cloud_instance falls back to URL-based detection."""
+    test_cases = [
+        # (service, url, expected_result)
+        ("jira", "https://example.atlassian.net", True),
+        ("jira", "https://jira.example.com", False),
+        ("confluence", "https://example.atlassian.net/wiki", True),
+        ("confluence", "https://confluence.example.com", False),
+    ]
+    
+    for service, url, expected in test_cases:
+        with patch.dict("os.environ", {
+            f"{service.upper()}_URL": url,
+        }, clear=True):
+            assert is_cloud_instance(service) is expected
+
+
+def test_is_cloud_instance_no_url():
+    """Test that is_cloud_instance defaults to server when no URL is present."""
+    with patch.dict("os.environ", {}, clear=True):
+        assert is_cloud_instance("jira") is False
+        assert is_cloud_instance("confluence") is False
+
+
+def test_is_cloud_instance_precedence():
+    """Test that explicit setting takes precedence over URL-based detection."""
+    test_cases = [
+        # (is_cloud_value, url, expected_result)
+        ("true", "https://jira.example.com", True),  # Explicit cloud overrides server URL
+        ("false", "https://example.atlassian.net", False),  # Explicit server overrides cloud URL
+    ]
+    
+    for is_cloud_value, url, expected in test_cases:
+        with patch.dict("os.environ", {
+            "JIRA_IS_CLOUD": is_cloud_value,
+            "JIRA_URL": url,
+        }, clear=True):
+            assert is_cloud_instance("jira") is expected
